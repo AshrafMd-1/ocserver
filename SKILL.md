@@ -118,6 +118,78 @@ Returns only **active** issues assigned to you.
 
 ---
 
+### Get Single Issue Details
+
+```
+GET /linear/issue/{identifier}
+```
+
+Returns complete details for a specific issue including description and all comments.
+
+**Parameters:**
+- `{identifier}`: Issue identifier (e.g., `PROJ-123`, `GOV-619`)
+
+**Response Structure:**
+```json
+{
+  "app": "linear",
+  "path": "issue",
+  "data": {
+    "issue": {
+      "id": "uuid",
+      "identifier": "PROJ-123",
+      "title": "Issue title",
+      "description": "Full markdown description...",
+      "priority": 1,
+      "priorityLabel": "High",
+      "state": {
+        "id": "uuid",
+        "name": "In Progress",
+        "color": "#f2c94c",
+        "type": "started"
+      },
+      "assignee": {
+        "id": "uuid",
+        "name": "User Name",
+        "email": "user@example.com"
+      },
+      "team": {
+        "id": "uuid",
+        "name": "Team Name",
+        "key": "PROJ"
+      },
+      "labels": [
+        {
+          "id": "uuid",
+          "name": "bug",
+          "color": "#e5484d"
+        }
+      ],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T12:00:00.000Z",
+      "url": "https://linear.app/workspace/issue/PROJ-123"
+    },
+    "comments": [
+      {
+        "id": "uuid",
+        "body": "Comment text in markdown...",
+        "user": {
+          "id": "uuid",
+          "name": "Commenter Name",
+          "email": "commenter@example.com"
+        },
+        "createdAt": "2024-01-01T10:00:00.000Z",
+        "updatedAt": "2024-01-01T10:00:00.000Z"
+      }
+    ],
+    "commentCount": 5
+  },
+  "timestamp": "2024-01-01T12:00:00.000Z"
+}
+```
+
+---
+
 ## Response Format
 
 All endpoints return JSON.

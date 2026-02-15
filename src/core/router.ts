@@ -50,60 +50,74 @@ export function createRouter(): Router {
   });
 
   /**
-   * GET /:app/:path
-   * Executes the handler for the given app and path.
+   * Register dynamic routes for each app's path handlers.
+   * This allows handlers to define their own Express route patterns (e.g., "issue/:identifier").
    */
-  router.get(
-    '/:app/:path',
-    async (req: Request, res: Response, next: NextFunction) => {
-      const { app, path: pathName } = req.params;
+  const apps = registry.getAllPlugins();
+  for (const appName of apps) {
+    const paths = registry.getPluginPaths(appName);
+    if (!paths) continue;
 
-      try {
-        const plugin = await registry.getPlugin(app);
+    for (const pathHandler of paths) {
+      // Build the full Express route: /:app/path-pattern
+      const fullRoute = `/${appName}/${pathHandler.name}`;
 
-        if (!plugin) {
-          return next(new AppError(`App "${app}" not found`, 404));
-        }
+      logger.debug(`Registering route: GET ${fullRoute}`);
 
-        const pathHandler = plugin.paths.find((p) => p.name === pathName);
+      router.get(
+        fullRoute,
+        async (req: Request, res: Response, next: NextFunction) => {
+          try {
+            // Initialize plugin on first use
+            await registry.getPlugin(appName);
 
-        if (!pathHandler) {
-          return next(
-            new PluginError(
-              app,
-              `Path "${pathName}" not found in app "${app}"`,
-              404,
-            ),
-          );
-        }
+            // Validate query parameters if schema is defined
+            if (pathHandler.schema) {
+              const validation = pathHandler.schema.safeParse(req.query);
+              if (!validation.success) {
+                return next(
+                  new AppError(
+                    `Invalid parameters: ${validation.error.issues.map((i) => i.message).join(', ')}`,
+                    400,
+                  ),
+                );
+              }
+            }
 
-        // Validate query parameters if schema is defined
-        if (pathHandler.schema) {
-          const validation = pathHandler.schema.safeParse(req.query);
-          if (!validation.success) {
-            return next(
-              new AppError(
-                `Invalid parameters: ${validation.error.issues.map((i) => i.message).join(', ')}`,
-                400,
-              ),
+            logger.debug(`Executing handler: ${appName}/${pathHandler.name}`);
+            await pathHandler.handler(req, res, next);
+          } catch (err) {
+            next(
+              err instanceof AppError
+                ? err
+                : new PluginError(
+                    appName,
+                    `Handler error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                  ),
             );
           }
-        }
+        },
+      );
+    }
+  }
 
-        logger.debug(`Executing handler: ${app}/${pathName}`);
-        await pathHandler.handler(req, res, next);
-      } catch (err) {
-        next(
-          err instanceof AppError
-            ? err
-            : new PluginError(
-                app,
-                `Handler error: ${err instanceof Error ? err.message : 'Unknown error'}`,
-              ),
-        );
-      }
-    },
-  );
+  /**
+   * Catch-all route for unmatched paths.
+   * This handles 404s for unknown apps or paths.
+   */
+  router.use('/:app/*?', (req: Request, _res: Response, next: NextFunction) => {
+    const { app } = req.params;
+
+    // Check if app exists
+    const appExists = apps.includes(app);
+
+    if (!appExists) {
+      return next(new AppError(`App "${app}" not found`, 404));
+    }
+
+    // App exists but path not found
+    return next(new AppError(`Path not found in app "${app}"`, 404));
+  });
 
   return router;
 }

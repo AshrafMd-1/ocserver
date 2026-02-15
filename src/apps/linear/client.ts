@@ -107,3 +107,107 @@ export async function fetchMyIssues(): Promise<LinearIssue[]> {
     );
   }
 }
+
+/**
+ * Fetch a single issue by identifier (e.g., "PROJ-123") with all details and comments.
+ * Returns complete issue information including description and comment thread.
+ */
+export async function fetchIssueByIdentifier(identifier: string): Promise<{
+  issue: LinearIssue;
+  comments: Array<{
+    id: string;
+    body: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+    } | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}> {
+  try {
+    const linearClient = getLinearClient();
+    const issueResult = await linearClient.issue(identifier);
+
+    if (!issueResult) {
+      throw new ApiError(`Issue "${identifier}" not found`, 404);
+    }
+
+    const [state, assignee, team, labels, commentsConnection] = await Promise.all([
+      issueResult.state,
+      issueResult.assignee,
+      issueResult.team,
+      issueResult.labels(),
+      issueResult.comments(),
+    ]);
+
+    const issue: LinearIssue = {
+      id: issueResult.id,
+      identifier: issueResult.identifier,
+      title: issueResult.title,
+      description: issueResult.description ?? undefined,
+      priority: issueResult.priority,
+      priorityLabel: issueResult.priorityLabel,
+      state: state
+        ? {
+            id: state.id,
+            name: state.name,
+            color: state.color,
+            type: state.type,
+          }
+        : null,
+      assignee: assignee
+        ? {
+            id: assignee.id,
+            name: assignee.name,
+            email: assignee.email,
+          }
+        : null,
+      team: team
+        ? {
+            id: team.id,
+            name: team.name,
+            key: team.key,
+          }
+        : null,
+      labels: labels.nodes.map((label) => ({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+      })),
+      createdAt: issueResult.createdAt.toISOString(),
+      updatedAt: issueResult.updatedAt.toISOString(),
+      url: issueResult.url,
+    };
+
+    const comments = await Promise.all(
+      commentsConnection.nodes.map(async (comment) => {
+        const user = await comment.user;
+        return {
+          id: comment.id,
+          body: comment.body,
+          user: user
+            ? {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+              }
+            : null,
+          createdAt: comment.createdAt.toISOString(),
+          updatedAt: comment.updatedAt.toISOString(),
+        };
+      }),
+    );
+
+    return { issue, comments };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    logger.error('Linear API error details:', err);
+    throw new ApiError(
+      `Failed to fetch issue "${identifier}" from Linear`,
+      502,
+      err instanceof Error ? err : new Error(String(err)),
+    );
+  }
+}
