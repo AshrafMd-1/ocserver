@@ -1,0 +1,41 @@
+{
+  "name": "ocserver",
+  "version": "1.0.0",
+  "description": "OpenClaw Proxy Server - Unified REST API for multiple app integrations",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest --forceExit --detectOpenHandles",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [
+    "proxy",
+    "api",
+    "linear",
+    "plugin"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@linear/sdk": "^29.0.0",
+    "dotenv": "^17.3.1",
+    "express": "^4.21.0",
+    "winston": "^3.14.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.5.0",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
