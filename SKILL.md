@@ -1,3 +1,8 @@
+---
+name: linear-proxy
+description: REST API for Linear.app with smart issue filtering. Provides read-only access to active Linear issues. Use when you need to fetch active tasks, issues, or ticket details from Linear.
+---
+
 # OpenClaw Proxy Server
 
 REST API for Linear.app with smart issue filtering. Provides read-only access to active Linear issues.
