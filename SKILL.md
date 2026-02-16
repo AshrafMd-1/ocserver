@@ -3,13 +3,9 @@ name: linear-proxy
 description: REST API for Linear.app with smart issue filtering. Provides read-only access to active Linear issues. Use when you need to fetch active tasks, issues, or ticket details from Linear.
 ---
 
-# OpenClaw Proxy Server
+# Linear Proxy API
 
-REST API for Linear.app with smart issue filtering. Provides read-only access to active Linear issues.
-
-## What This Skill Does
-
-Fetches Linear issues assigned to the authenticated user, automatically filtering out completed work. Returns only issues that are actively in progress or pending.
+Direct REST API access to Linear.app with automatic filtering of completed work. Returns only active issues.
 
 ## Base URL
 
@@ -17,63 +13,24 @@ Fetches Linear issues assigned to the authenticated user, automatically filterin
 http://localhost:3000
 ```
 
-## Available Endpoints
+## Endpoints
 
-### List Available Apps
+### Get All Your Active Issues
 
-```
-GET /items
-```
-
-Returns all available integrations.
-
-**Response:**
-```json
-{
-  "apps": ["linear"],
-  "count": 1
-}
-```
-
----
-
-### List App Endpoints
-
-```
-GET /list/linear
-```
-
-Returns available endpoints for Linear.
-
-**Response:**
-```json
-{
-  "app": "linear",
-  "paths": [
-    {
-      "name": "my-issues",
-      "description": "Fetch all issues assigned to the authenticated user"
-    }
-  ],
-  "count": 1
-}
-```
-
----
-
-### Get My Active Issues
+**Use this to:** See all issues currently assigned to you that are not completed or canceled.
 
 ```
 GET /linear/my-issues
 ```
 
-Returns only **active** issues assigned to you.
+**Returns:** List of active issues with full details (title, description, state, priority, labels, etc.)
 
-**Automatic Filtering:** Excludes issues with these states:
-- State types: `completed`, `canceled`
-- State names: `Done`, `Cancelled`, `Canceled`, `Duplicate`, `Resolved`
+**Example:**
+```bash
+curl http://localhost:3000/linear/my-issues
+```
 
-**Response Structure:**
+**Response:**
 ```json
 {
   "app": "linear",
@@ -81,31 +38,26 @@ Returns only **active** issues assigned to you.
   "data": {
     "issues": [
       {
-        "id": "uuid",
         "identifier": "PROJ-123",
         "title": "Issue title",
         "description": "Optional description",
         "priority": 1,
         "priorityLabel": "High",
         "state": {
-          "id": "uuid",
           "name": "In Progress",
           "color": "#f2c94c",
           "type": "started"
         },
         "assignee": {
-          "id": "uuid",
           "name": "User Name",
           "email": "user@example.com"
         },
         "team": {
-          "id": "uuid",
           "name": "Team Name",
           "key": "PROJ"
         },
         "labels": [
           {
-            "id": "uuid",
             "name": "bug",
             "color": "#e5484d"
           }
@@ -121,51 +73,56 @@ Returns only **active** issues assigned to you.
 }
 ```
 
+**Automatic Filtering:**
+- Excludes completed issues
+- Excludes canceled issues
+- Excludes states: Done, Cancelled, Canceled, Duplicate, Resolved
+
 ---
 
-### Get Single Issue Details
+### Get Specific Issue Details
+
+**Use this to:** Get complete details for a specific issue including full description and all comments.
 
 ```
 GET /linear/issue/{identifier}
 ```
 
-Returns complete details for a specific issue including description and all comments.
-
 **Parameters:**
-- `{identifier}`: Issue identifier (e.g., `PROJ-123`, `GOV-619`)
+- `{identifier}`: Issue ID (e.g., `PROJ-123`, `GOV-619`)
 
-**Response Structure:**
+**Example:**
+```bash
+curl http://localhost:3000/linear/issue/PROJ-123
+```
+
+**Response:**
 ```json
 {
   "app": "linear",
   "path": "issue",
   "data": {
     "issue": {
-      "id": "uuid",
       "identifier": "PROJ-123",
       "title": "Issue title",
       "description": "Full markdown description...",
       "priority": 1,
       "priorityLabel": "High",
       "state": {
-        "id": "uuid",
         "name": "In Progress",
         "color": "#f2c94c",
         "type": "started"
       },
       "assignee": {
-        "id": "uuid",
         "name": "User Name",
         "email": "user@example.com"
       },
       "team": {
-        "id": "uuid",
         "name": "Team Name",
         "key": "PROJ"
       },
       "labels": [
         {
-          "id": "uuid",
           "name": "bug",
           "color": "#e5484d"
         }
@@ -176,15 +133,12 @@ Returns complete details for a specific issue including description and all comm
     },
     "comments": [
       {
-        "id": "uuid",
         "body": "Comment text in markdown...",
         "user": {
-          "id": "uuid",
           "name": "Commenter Name",
           "email": "commenter@example.com"
         },
-        "createdAt": "2024-01-01T10:00:00.000Z",
-        "updatedAt": "2024-01-01T10:00:00.000Z"
+        "createdAt": "2024-01-01T10:00:00.000Z"
       }
     ],
     "commentCount": 5
@@ -195,35 +149,9 @@ Returns complete details for a specific issue including description and all comm
 
 ---
 
-## Response Format
-
-All endpoints return JSON.
-
-**Success Response:**
-```json
-{
-  "app": "string",
-  "path": "string",
-  "data": { ... },
-  "timestamp": "ISO 8601 UTC"
-}
-```
-
-**Error Response:**
-```json
-{
-  "error": "Error message",
-  "statusCode": 404,
-  "timestamp": "ISO 8601 UTC"
-}
-```
-
----
-
-## Field Reference
+## Quick Reference
 
 ### Priority Values
-
 - `0`: No priority
 - `1`: Urgent
 - `2`: High
@@ -231,25 +159,29 @@ All endpoints return JSON.
 - `4`: Low
 
 ### State Types
+- `unstarted`: Not started (To Do, Backlog)
+- `started`: In progress (In Progress, In Review)
+- `completed`: ❌ Filtered out automatically
+- `canceled`: ❌ Filtered out automatically
 
-- `unstarted`: Not started (e.g., "To Do", "Backlog")
-- `started`: In progress (e.g., "In Progress", "In Review")
-- `completed`: ❌ **Filtered out**
-- `canceled`: ❌ **Filtered out**
+### Error Responses
 
-### Timestamps
-
-All timestamps are in UTC using ISO 8601 format:
-```
-"2024-01-01T12:00:00.000Z"
+All errors return JSON:
+```json
+{
+  "error": "Error message",
+  "statusCode": 404,
+  "timestamp": "2024-01-01T12:00:00.000Z"
+}
 ```
 
 ---
 
-## Usage Notes
+## Agent Usage Tips
 
-1. **Filtering is automatic** - No need to manually filter responses
-2. **Issue count varies** - Reflects current Linear state
-3. **All responses are JSON** - Parse before processing
-4. **Read-only API** - Does not modify Linear data
-5. **Authentication is pre-configured** - No tokens needed in requests
+1. **Start with `/linear/my-issues`** to see all active work
+2. **Use `/linear/issue/{identifier}`** when you need full details or comments
+3. **No authentication needed** - API key is pre-configured
+4. **All timestamps are UTC** in ISO 8601 format
+5. **Read-only API** - Does not modify Linear data
+6. **Filtering is automatic** - Only active issues are returned
