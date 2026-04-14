@@ -1,122 +1,104 @@
-# OpenClaw Proxy Server (ocserver)
+# OpenClaw Proxy Server
 
-A plugin-based Node.js proxy server that provides a unified REST API for OpenClaw to interact with multiple third-party applications. Currently supports Linear issue tracking.
+A plugin-based Node.js proxy server that gives OpenClaw agents a unified REST API to interact with productivity tools. Drop a new plugin directory in `src/apps/` and it's live — no changes to core code required.
 
-## Architecture
+**Current integrations:** Linear
+
+## How It Works
 
 ```
-ocserver/
-  src/
-    apps/           # Plugin integrations (one directory per app)
-      linear/       # Linear issue tracking plugin
-    config/         # Environment config with Zod validation
-    core/           # Plugin system (types, registry, router, errors)
-    middleware/     # Express middleware (logging, error handling)
-    utils/          # Shared utilities (Winston logger)
-    server.ts       # Express app assembly
-    index.ts        # Server entry point
-  tests/
-    unit/           # Unit tests
-    integration/    # Integration tests
+Request → Express → Dynamic Router → Plugin Registry → Path Handler → External API
+```
+
+Plugins are auto-discovered at startup by scanning `src/apps/*/index.ts` for a `*Plugin` export. Each plugin initializes lazily on its first request. Routes are registered as real Express patterns, so handlers can define dynamic segments like `issue/:identifier`.
+
+## Project Structure
+
+```
+src/
+├── core/
+│   ├── types.ts          # AppPlugin and PathHandler interfaces
+│   ├── registry.ts       # Auto-discovery, registration, lazy init
+│   ├── router.ts         # Dynamic Express route registration
+│   └── errors.ts         # AppError / PluginError / ApiError hierarchy
+├── config/
+│   ├── env.schema.ts     # Zod environment schemas
+│   └── index.ts          # Loads dotenv, exports validated config
+├── apps/
+│   └── linear/
+│       ├── index.ts      # Plugin export (linearPlugin)
+│       ├── config.ts     # LINEAR_API_KEY validation
+│       ├── client.ts     # Linear SDK wrapper
+│       ├── types.ts      # TypeScript interfaces
+│       └── paths/
+│           ├── index.ts          # Re-exports all handlers
+│           ├── my-issues.ts      # GET /linear/my-issues
+│           └── issue-detail.ts   # GET /linear/issue/:identifier
+├── middleware/
+│   ├── logger.ts         # HTTP request logging
+│   └── errorHandler.ts   # Global error → JSON response
+├── utils/
+│   └── logger.ts         # Winston logger
+├── server.ts             # Express app assembly
+└── index.ts              # Entry point
+tests/
+├── unit/apps/linear/     # Linear client unit tests (mocked SDK)
+└── integration/routes/   # Full HTTP cycle tests (supertest)
 ```
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 18+
-- npm
-
-### Installation
+**Prerequisites:** Node.js 18+
 
 ```bash
 npm install
+cp .env.example .env   # then fill in LINEAR_API_KEY
+npm run dev            # starts with hot reload on port 3000
 ```
 
-### Configuration
-
-Copy the example environment file and fill in your values:
-
-```bash
-cp .env.example .env
-```
+### Environment Variables
 
 | Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
+|---|---|---|---|
+| `LINEAR_API_KEY` | Yes* | — | Linear API key (* required for Linear plugin) |
 | `PORT` | No | `3000` | Server port |
-| `NODE_ENV` | No | `development` | Environment |
-| `LOG_LEVEL` | No | `info` | Log level (error, warn, info, http, debug) |
-| `LINEAR_API_KEY` | Yes* | - | Linear API key (* required for Linear plugin) |
+| `NODE_ENV` | No | `development` | `development` or `production` |
+| `LOG_LEVEL` | No | `info` | `error` `warn` `info` `http` `debug` |
 
-### Running
+Get a Linear API key at **Linear → Settings → API → Personal API keys**.
 
-```bash
-# Development (with hot reload)
-npm run dev
-
-# Production
-npm run build
-npm start
-```
-
-### Testing
+### Commands
 
 ```bash
-npm test
-npm run test:coverage
+npm run dev            # development with hot reload
+npm run build          # compile TypeScript → dist/
+npm start              # run compiled build
+npm test               # run all tests
+npm run test:coverage  # tests with coverage report
 ```
 
-## API Endpoints
+## API Reference
 
-### List All Apps
-
-```
-GET /items
-```
-
-Response:
-```json
-{
-  "apps": ["linear"],
-  "count": 1
-}
-```
-
-### List App Paths
+### System
 
 ```
-GET /list/:app
+GET /health            → { status, uptime, timestamp }
+GET /items             → { apps: ["linear"], count: 1 }
+GET /list/:app         → { app, paths: [{ name, description }], count }
 ```
 
-Example: `GET /list/linear`
+### Linear
 
-Response:
-```json
-{
-  "app": "linear",
-  "paths": [
-    {
-      "name": "my-issues",
-      "description": "Fetch all issues assigned to the authenticated user"
-    }
-  ],
-  "count": 1
-}
+#### `GET /linear/my-issues`
+
+Returns all active issues assigned to the authenticated user. Automatically excludes completed and canceled work.
+
+**Filtered out:** state types `completed` / `canceled`, state names `Done`, `Cancelled`, `Canceled`, `Duplicate`, `Resolved`
+
+```bash
+curl http://localhost:3000/linear/my-issues
 ```
 
-### Execute Path Handler
-
-```
-GET /:app/:path
-```
-
-Example: `GET /linear/my-issues`
-
-**Filtering:** Returns only active issues assigned to you. Excludes:
-- State types: `completed`, `canceled`
-- State names: `Done`, `Cancelled`, `Canceled`, `Duplicate`, `Resolved`
-
-Response:
 ```json
 {
   "app": "linear",
@@ -124,16 +106,12 @@ Response:
   "data": {
     "issues": [
       {
-        "id": "...",
         "identifier": "PROJ-123",
         "title": "Issue title",
-        "state": {
-          "name": "In Progress",
-          "type": "started",
-          "color": "#f2c94c"
-        },
-        "priority": 1,
+        "description": "Optional markdown description",
+        "priority": 2,
         "priorityLabel": "High",
+        "state": { "name": "In Progress", "type": "started", "color": "#f2c94c" },
         "assignee": { "name": "User", "email": "user@example.com" },
         "team": { "name": "Team", "key": "PROJ" },
         "labels": [{ "name": "bug", "color": "#e5484d" }],
@@ -148,100 +126,91 @@ Response:
 }
 ```
 
-### Health Check
+#### `GET /linear/issue/:identifier`
 
-```
-GET /health
+Returns full details for a single issue including description and all comments.
+
+```bash
+curl http://localhost:3000/linear/issue/PROJ-123
 ```
 
-Response:
 ```json
 {
-  "status": "ok",
-  "uptime": 123.456,
+  "app": "linear",
+  "path": "issue",
+  "data": {
+    "issue": { "...same fields as above..." },
+    "comments": [
+      {
+        "body": "Comment text in markdown",
+        "user": { "name": "Commenter", "email": "user@example.com" },
+        "createdAt": "2024-01-01T10:00:00.000Z"
+      }
+    ],
+    "commentCount": 3
+  },
   "timestamp": "2024-01-01T00:00:00.000Z"
 }
 ```
 
-### Error Responses
+**Priority values:** `0` = None, `1` = Urgent, `2` = High, `3` = Medium, `4` = Low
 
-All errors follow this format:
+### Error Format
+
+All errors return a consistent JSON body:
 
 ```json
 {
-  "error": "Error message",
-  "app": "linear",
-  "path": "my-issues",
+  "error": "App \"github\" not found",
   "statusCode": 404,
   "timestamp": "2024-01-01T00:00:00.000Z"
 }
 ```
 
-## Adding a New App Plugin
+## Adding a Plugin
 
-The plugin system is fully modular. Adding a new app requires **zero changes to core code**.
-
-### 1. Create the Plugin Directory
-
-```
-src/apps/your-app/
-  types.ts        # TypeScript types for your data
-  config.ts       # Config validation (API keys, etc.)
-  client.ts       # API client wrapper
-  paths/
-    index.ts      # Export all path handlers
-    my-path.ts    # Individual path handler
-  index.ts        # Plugin registration
-```
-
-### 2. Implement the Plugin Interface
+Zero changes to core code. Create `src/apps/your-app/` with this structure:
 
 ```typescript
 // src/apps/your-app/index.ts
 import type { AppPlugin } from '../../core/types';
-import { yourPaths } from './paths';
 
 export const yourAppPlugin: AppPlugin = {
   name: 'your-app',
   version: '1.0.0',
   description: 'Integration with Your App',
-  paths: yourPaths,
-
+  paths: [
+    {
+      name: 'my-path',
+      description: 'What this endpoint returns',
+      handler: async (req, res) => {
+        res.json({
+          app: 'your-app',
+          path: 'my-path',
+          data: { /* ... */ },
+          timestamp: new Date().toISOString(),
+        });
+      },
+    },
+  ],
   async initialize() {
-    // Validate config, create API client, etc.
-  },
-
-  async healthCheck() {
-    // Optional: verify external API is reachable
-    return true;
+    // Validate API keys, create clients, etc.
   },
 };
 ```
 
-### 3. Create Path Handlers
+The server discovers and registers it automatically on next startup. The route `GET /your-app/my-path` is live immediately.
 
-```typescript
-// src/apps/your-app/paths/my-path.ts
-import type { PathHandler } from '../../../core/types';
+For dynamic path segments, set `name: 'item/:id'` — Express handles parameter extraction via `req.params`.
 
-const myPathHandler: PathHandler = {
-  name: 'my-path',
-  description: 'Description of what this does',
-  handler: async (req, res) => {
-    const data = await fetchSomething();
-    res.json({
-      app: 'your-app',
-      path: 'my-path',
-      data,
-      timestamp: new Date().toISOString(),
-    });
-  },
-};
+## Adding a Path to an Existing Plugin
 
-export default myPathHandler;
-```
+1. Create `src/apps/linear/paths/new-path.ts` implementing `PathHandler`
+2. Export it from `src/apps/linear/paths/index.ts`
+3. Add any needed SDK calls to `client.ts`
+4. Run `npm test`
 
-The plugin will be **auto-discovered** on server startup. No registration code needed.
+No changes to router, registry, or server setup.
 
 ## License
 
