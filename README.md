@@ -211,7 +211,3 @@ For dynamic path segments, set `name: 'item/:id'` — Express handles parameter 
 4. Run `npm test`
 
 No changes to router, registry, or server setup.
-
-## License
-
-ISC
