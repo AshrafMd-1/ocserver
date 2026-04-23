@@ -1,6 +1,6 @@
 # OpenClaw Proxy Server
 
-A plugin-based Node.js proxy server that gives OpenClaw agents a unified REST API to interact with productivity tools. Drop a new plugin directory in `src/apps/` and it's live — no changes to core code required.
+A plugin-based Node.js proxy server that gives OpenClaw agents a unified REST API to interact with productivity tools. Drop a new plugin directory in `src/apps/` and it's live - no changes to core code required.
 
 **Current integrations:** Linear
 
@@ -60,7 +60,7 @@ npm run dev            # starts with hot reload on port 3000
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `LINEAR_API_KEY` | Yes* | — | Linear API key (* required for Linear plugin) |
+| `LINEAR_API_KEY` | Yes* | - | Linear API key (* required for Linear plugin) |
 | `PORT` | No | `3000` | Server port |
 | `NODE_ENV` | No | `development` | `development` or `production` |
 | `LOG_LEVEL` | No | `info` | `error` `warn` `info` `http` `debug` |
@@ -201,7 +201,7 @@ export const yourAppPlugin: AppPlugin = {
 
 The server discovers and registers it automatically on next startup. The route `GET /your-app/my-path` is live immediately.
 
-For dynamic path segments, set `name: 'item/:id'` — Express handles parameter extraction via `req.params`.
+For dynamic path segments, set `name: 'item/:id'` - Express handles parameter extraction via `req.params`.
 
 ## Adding a Path to an Existing Plugin
 
